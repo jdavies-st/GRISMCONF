@@ -100,7 +100,6 @@ def specwcs_poly(wfss_file,order=1):
         try:
             specwcs = dm.meta.ref_file.specwcs.name[7:]
             photom = dm.meta.ref_file.photom.name[7:]
-            pixarea = dm.meta.photometry.pixelarea_steradians
         except:
             raise NameError('Failed to find WFSS WCS information in input file. Make sure that the JWST pipeline wcs_assign and photom steps were applied.')
 
