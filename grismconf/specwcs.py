@@ -9,32 +9,7 @@ from astropy.modeling import polynomial
 from astropy.io import fits
 from astropy.table import Table
 from scipy.interpolate import interp1d
-
-
-def fetch_reffile(filename, overwrite=True,show=True):
-    crdsurl = f"https://jwst-crds.stsci.edu/unchecked_get/references/jwst/{filename}"
-
-    download = False
-    if os.path.exists(filename):
-        if overwrite:
-            # do it
-            download = True
-    else:
-        # do it
-        download = True
-
-
-    if (os.path.exists(filename) and overwrite) or not os.path.exists(filename):
-        if show:
-            print(f"Fetching the file {filename}")
-        r = requests.get(crdsurl, stream=True) # params=params, headers=headers, stream=True)
-        r.raise_for_status()
-        with open(filename, "wb") as fobj:
-            for chunk in r.iter_content(chunk_size=1_024_000):
-                fobj.write(chunk)
-    else:
-        if show:
-            print(f'Using local copy of {filename}')
+from stpipe.crds_client import get_reference_file
 
 
 def reformat_poly(obj):
@@ -64,30 +39,27 @@ def get_sensitivity(wfss_file, order=1, show=False):
     """Fetch and process the sensitivity file for this observation. This function cleans up the content of 
     the calibration file and changes the units of the sensitivity to be in flam per DN/s"""
     
-    # We need to get the pixel size of the detector. We also get the PUPIL and FILTER name
-    with fits.open(wfss_file) as fin:
-        pixel_area = fin[1].header['PIXAR_SR']
-        pupil = fin[0].header['PUPIL']
-        filter = fin[0].header['FILTER']
+    with datamodels.open(wfss_file) as dm:
+        # Use CRDS to get the photom reference file
+        parameters = dm.get_crds_parameters()
+        photom = get_reference_file(parameters, "photom", "jwst")
+        pupil = dm.meta.instrument.pupil
+        filter = dm.meta.instrument.filter
 
-    m = datamodels.open(wfss_file)
-
-    sensitivity_file = m.meta.ref_file.photom.name[7:]
-    fetch_reffile(sensitivity_file, overwrite=False, show=False)
-
-    tab = Table.read(sensitivity_file)
-    ok = (tab['filter'] == filter) & (tab['pupil'] == pupil) & (tab['order'] == order)
-    w = np.asarray(tab[ok][0]['wavelength'])
-    s = np.asarray(tab[ok][0]['relresponse'])
-    photmjsr = tab[ok][0]['photmjsr']
-    ok = np.nonzero(w)
-    w = w[ok]
-    s = s[ok]
+        tab = Table.read(photom)
+        pixel_area = tab.meta['PIXAR_SR']
+        ok = (tab['filter'] == filter) & (tab['pupil'] == pupil) & (tab['order'] == order)
+        w = np.asarray(tab[ok][0]['wavelength'])
+        s = np.asarray(tab[ok][0]['relresponse'])
+        photmjsr = tab[ok][0]['photmjsr']
+        ok = np.nonzero(w)
+        w = w[ok]
+        s = s[ok]
 
     # The sensitivity is by default in units of Mjy per SR per DN/s (per pixel) which we convert to
     # the more traditional value of erg/s/cm^2/A per DN/s
     c = 29_979_245_800.0 
-    s2 = (w*1e4)/c * (w/1e8) / (s*photmjsr*1e6*1e-23*pixel_area) * 10000
+    s2 = (w * 1e4) / c * (w / 1e8) / (s * photmjsr * 1e6 * 1e-23 * pixel_area) * 10000
 
     if show:
         plt.plot(w, s2)
@@ -98,16 +70,11 @@ def get_sensitivity(wfss_file, order=1, show=False):
     return w, s2
 
 def specwcs_poly(wfss_file, order=1):
-    with datamodels.open(wfss_file) as dm:
-        try:
-            specwcs = dm.meta.ref_file.specwcs.name[7:]
-        except:
-            raise NameError('Failed to find WFSS WCS information in input file. Make sure that the JWST pipeline assign_wcs step was run on input rate file.')
-
     DISPX_data = {}
     DISPY_data = {}
     DISPL_data = {}
     SENS_data = {}
+
     with datamodels.open(wfss_file) as dm:
         t = dm.meta.wcs.get_transform('detector', 'grism_detector')[-1]
         for order, xmodel, ymodel, lmodel in zip(t.orders, t.xmodels, t.ymodels, t.lmodels):
