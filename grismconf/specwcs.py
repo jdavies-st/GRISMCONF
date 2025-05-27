@@ -121,7 +121,7 @@ def specwcs_poly(wfss_file, order=1):
             if len(t.ymodels[g]) == 1:
                 DISPY_data[sorder] = DISPY_data[sorder][0]
 
-            DISPL_data[sorder] = np.array([reformat_poly(p2d) for p2d in t.lmodels[g]])
+            DISPL_data[sorder] = np.array([reformat_poly(p2d) for p2d in t.lmodels[g] if isiterable(t.lmodels[g]) else reformat_poly(t.lmodels[g])])
             if len(t.lmodels[g]) == 1:
                 DISPL_data[sorder] = DISPL_data[sorder][0]
 
