@@ -110,20 +110,22 @@ def specwcs_poly(wfss_file, order=1):
     SENS_data = {}
     with datamodels.open(wfss_file) as dm:
         t = dm.wcs.get_transform('detector', 'grism_detector')[-1]
-        for g, order in enumerate(t.orders):
+        for order, xmodel, ymodel, lmodel in zip(t.orders, t.xmodels, t.ymodels, t.lmodels):
             sorder = f'{order:+}'
 
-            DISPX_data[sorder] = np.array([reformat_poly(p2d) for p2d in t.xmodels[g]])
-            if len(t.xmodels[g]) == 1:
+            DISPX_data[sorder] = np.array([reformat_poly(p2d) for p2d in xmodel])
+            if len(xmodel) == 1:
                 DISPX_data[sorder] = DISPX_data[sorder][0]
 
-            DISPY_data[sorder] = np.array([reformat_poly(p2d) for p2d in t.ymodels[g]])
-            if len(t.ymodels[g]) == 1:
+            DISPY_data[sorder] = np.array([reformat_poly(p2d) for p2d in ymodel])
+            if len(ymodel) == 1:
                 DISPY_data[sorder] = DISPY_data[sorder][0]
 
-            DISPL_data[sorder] = np.array([reformat_poly(p2d) for p2d in t.lmodels[g] if isiterable(t.lmodels[g]) else reformat_poly(t.lmodels[g])])
-            if len(t.lmodels[g]) == 1:
-                DISPL_data[sorder] = DISPL_data[sorder][0]
+            # The lmodels are (5,) for the 5 orders, not (5, 3) for NIRISS
+            try:
+                DISPL_data[sorder] = np.array([reformat_poly(p2d) for p2d in lmodel])
+            except TypeError:
+                DISPL_data[sorder] = np.array(reformat_poly(lmodel))[0]
 
             SENS_data[sorder] = get_sensitivity(wfss_file, order=order)
 
