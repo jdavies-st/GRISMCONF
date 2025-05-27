@@ -109,7 +109,7 @@ def specwcs_poly(wfss_file, order=1):
     DISPL_data = {}
     SENS_data = {}
     with datamodels.open(wfss_file) as dm:
-        t = dm.wcs.get_transform('detector', 'grism_detector')[-1]
+        t = dm.meta.wcs.get_transform('detector', 'grism_detector')[-1]
         for order, xmodel, ymodel, lmodel in zip(t.orders, t.xmodels, t.ymodels, t.lmodels):
             sorder = f'{order:+}'
 
